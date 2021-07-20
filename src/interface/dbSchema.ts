@@ -8,8 +8,8 @@ export interface RoomDocument {
 
 export interface UserDocument {
     _id: string
-    nickname: string
-    roomId: string
+    nickname?: string
+    roomId?: string
 }
 export interface Point {
     x: number

@@ -17,7 +17,11 @@ const io = new Server(server, {
 const requesters: Socket[] = []
 io.on('connect', socket => {
 })
-const roomNsp = io.of('/room', socket => {
+
+/**
+ * room namespace가 가장 먼저 생성되므로, 이 socket id를 바탕으로 다른 자원을 관리한다.
+ */
+ const roomNsp = io.of('/room', socket => {
     // connection handler for 'room' namespace.
     console.log('namespace room connected')
 
@@ -28,22 +32,20 @@ const roomNsp = io.of('/room', socket => {
     socket.on('join', async (roomId: string, nickname: string, cb) => {
         console.log('join room')
         if (!roomId || !nickname) {
-            cb('invalid param')
+            socket.emit('error', 'invalid param')
+            cb('error')
             return
         }
         // join socket
         socket.join(roomId)
-        // store user
-        const user = { _id: socket.id, nickname, roomId } as UserDocument
-        await localDb.touchUser(user)
-
         const got = await localDb.getRoom(roomId)
         cb({ room: got })
     })
     socket.on('get', async (roomId: string, cb) => {
         console.log(`get room ${roomId}`);
         const got = await localDb.getRoom(roomId)
-        cb({ room: got })
+        console.log({ room: got})
+        cb({ "room": got })
     })
 
     socket.on('delete', async (roomId: string, cb) => {
@@ -52,8 +54,23 @@ const roomNsp = io.of('/room', socket => {
     })
 })
 
-const userNsp = io.of('/user', socket => {
+
+ const userNsp = io.of('/user', async socket => {
     console.log('namespace user connected')
+    // touch the user data
+    const id = socket.handshake.query.id as string
+    const roomId = socket.handshake.query.roomId as string
+    if (!id || !roomId) {
+        socket.emit('error', 'invalid param')
+        return
+    }
+    const user = await localDb.touchUser({_id: id})
+    if (user) {
+        socket.emit('me', user)
+    }
+
+    
+
     socket.on('list', async (roomId: string, cb) => {
         cb(localDb.getUsers(roomId))
     })
@@ -76,6 +93,11 @@ const userNsp = io.of('/user', socket => {
     })
 
 })
+
+
+
+
+
 
 const positionNsp = io.of('/position', socket => {
     console.log('namespace position connected')

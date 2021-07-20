@@ -15,20 +15,22 @@ const localDb = {
          */
         if (userDoc._id) {
             // check nickname
-            for (let item of inMemory.users) {
-                // item = [id, userDoc]
-                //// same room,
-                if (item[1].roomId === userDoc.roomId) {
-                    //// same nickname
-                    if (item[1].nickname === userDoc.nickname) {
-                        return { valid: false }
+            if (userDoc.roomId && userDoc.nickname) {
+                for (let item of inMemory.users) {
+                    // item = [id, userDoc]
+                    //// same room,
+                    if (item[1].roomId === userDoc.roomId) {
+                        //// same nickname
+                        if (item[1].nickname === userDoc.nickname) {
+                            return false
+                        }
                     }
                 }
             }
         }
         // user doc base 생성
         inMemory.users.set(userDoc._id, userDoc)
-        return { valid: true }
+        return userDoc
     },
     getUsers: async (roomId: string) => {
         let users: UserDocument[] = []

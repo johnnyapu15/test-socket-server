@@ -28,26 +28,23 @@ describe("my awesome project", () => {
         clientSocket = manager.socket(`/room`);
         clientSocket.on("connect", (arg) => {
             console.log(clientSocket.id)
-            //assert.equal(arg, "world");
-            //done();
-            clientSocket.emit('get', (res) => {
-                assert.equal(res.namespace, 'room')
+            const id = clientSocket.id
+            userSocket = manager.socket('/user', id)
+            positionSocket = manager.socket('/position', id)
+
+            
+            clientSocket.emit('get', 'test', (res) => {
+            
+                
+                
+                done()
+                clientSocket.close()
             })
-            clientSocket.close()
+            
         });
         clientSocket2 = manager.socket(`/position`);
         clientSocket2.on("connect", (arg) => {
-            console.log(clientSocket.id)
-            //assert.equal(arg, "world");
-            clientSocket2.emit('get', (res) => {
-                
-            })
-            clientSocket2.emit('get', (res) => {
-                assert.equal(res.namespace, 'position')
-                clientSocket2.close()
-                done();
-            })
-            
+            console.log(clientSocket2.id)           
             
         });
     });
