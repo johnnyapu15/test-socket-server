@@ -78,7 +78,7 @@ const localDb = {
         )
     },
     updatePosition: async (positionId: string, positionDoc: Partial<PositionDocument>) => {
-        const position = inMemory.positions.get(positionId)
+        const position = inMemory.positions.get(positionId) ?? {} as PositionDocument
         if (positionDoc.center) {
             position.center = positionDoc.center
         }
@@ -87,7 +87,7 @@ const localDb = {
         }
         position.timestamp = Date.now()
         inMemory.positions.set(
-            positionDoc._id,
+            positionId,
             position
         )
     }

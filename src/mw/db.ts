@@ -1,4 +1,4 @@
-import {Db, MongoClient, MongoDBNamespace} from 'mongodb'
+import {Db as MongoDb, MongoClient, MongoDBNamespace} from 'mongodb'
 import { Db, UserDocument, RoomDocument } from "../interface/dbSchema";
 
 const url = 'mongodb://localhost:27017'
@@ -16,7 +16,7 @@ async function getDb() {
     return client.db(dbName)
 }
 
-async function getCollection<T>(client: Db, collection: string) {
+async function getCollection<T>(client: MongoDb, collection: string) {
     return client.collection<T>(collection)
 }
 
