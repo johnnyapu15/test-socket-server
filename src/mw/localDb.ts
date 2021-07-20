@@ -9,30 +9,25 @@ const inMemory: Db = {
 }
 
 const localDb = {
-    touchUser: async (socketId: string, nickname: string, roomId?: string) => {
+    touchUser: async (userDoc: UserDocument) => {
         /**
          * socketId -> join to room of roomId with nickname
          */
-        if (roomId) {
+        if (userDoc._id) {
             // check nickname
             for (let item of inMemory.users) {
                 // item = [id, userDoc]
                 //// same room,
-                if (item[1].roomId === roomId) {
+                if (item[1].roomId === userDoc.roomId) {
                     //// same nickname
-                    if (item[1].nickname === nickname) {
+                    if (item[1].nickname === userDoc.nickname) {
                         return { valid: false }
                     }
                 }
             }
         }
         // user doc base 생성
-        const user = {
-            _id: socketId,
-            nickname,
-            roomId
-        } as UserDocument
-        inMemory.users.set(socketId, user)
+        inMemory.users.set(userDoc._id, userDoc)
         return { valid: true }
     },
     getUsers: async (roomId: string) => {

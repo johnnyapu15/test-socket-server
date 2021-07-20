@@ -34,7 +34,8 @@ const roomNsp = io.of('/room', socket => {
         // join socket
         socket.join(roomId)
         // store user
-        await localDb.touchUser(socket.id, nickname, roomId)
+        const user = { _id: socket.id, nickname, roomId } as UserDocument
+        await localDb.touchUser(user)
 
         const got = await localDb.getRoom(roomId)
         cb({ room: got })
@@ -56,9 +57,9 @@ const userNsp = io.of('/user', socket => {
     socket.on('list', async (roomId: string, cb) => {
         cb(localDb.getUsers(roomId))
     })
-    socket.on('update', async (userDoc: Partial<UserDocument>) => {
+    socket.on('update', async (userDoc: UserDocument) => {
         // set db non-sync
-            localDb.touchUser(socket.id, userDoc.nickname, userDoc.roomId)
+            localDb.touchUser(userDoc)
         
         // broadcast to the room
         socket.rooms.forEach((room) => {
@@ -118,7 +119,7 @@ function updater() {
         // 특정 유저의 position이 self update인지, followed인지 관리할 수 있으면 좋을듯.
     });
 }
-setInterval(updater, 50)
+// setInterval(updater, 50)
 
 async function joinRoom(socket: Socket) {
     const { nickname, roomId } = socket.handshake.query
