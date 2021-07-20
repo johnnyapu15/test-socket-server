@@ -9,28 +9,36 @@ const inMemory: Db = {
 }
 
 const localDb = {
-    touchUser: async (userDoc: UserDocument) => {
-        /**
-         * socketId -> join to room of roomId with nickname
-         */
-        if (userDoc._id) {
-            // check nickname
-            if (userDoc.roomId && userDoc.nickname) {
-                for (let item of inMemory.users) {
-                    // item = [id, userDoc]
-                    //// same room,
-                    if (item[1].roomId === userDoc.roomId) {
-                        //// same nickname
-                        if (item[1].nickname === userDoc.nickname) {
-                            return false
-                        }
-                    }
+    checkNickname: (roomId: string, nickname: string) => {
+        // check nickname
+        for (let item of inMemory.users) {
+            // item = [id, userDoc]
+            //// same room,
+            if (item[1].roomId === roomId) {
+                //// same nickname
+                if (item[1].nickname === nickname) {
+                    return false
                 }
             }
         }
-        // user doc base 생성
-        inMemory.users.set(userDoc._id, userDoc)
-        return userDoc
+        return true
+    },
+    touchUser: async (userId: string, userDoc?: UserDocument) => {
+        if (!userDoc) {
+            inMemory.users.delete(userId)
+            return true
+        }
+        const user = inMemory.users.get(userId) ?? { _id: userId } as UserDocument
+
+        if (userDoc.nickname) {
+            user.nickname = userDoc.nickname
+        }
+        if (userDoc.roomId) {
+            user.roomId = userDoc.roomId
+        }
+        inMemory.users.set(userId, user)
+
+        return user
     },
     getUsers: async (roomId: string) => {
         let users: UserDocument[] = []
@@ -79,7 +87,11 @@ const localDb = {
             positionDoc
         )
     },
-    updatePosition: async (positionId: string, positionDoc: Partial<PositionDocument>) => {
+    touchPosition: async (positionId: string, positionDoc?: Partial<PositionDocument>) => {
+        if (!positionDoc) {
+            inMemory.positions.delete(positionId)
+            return true
+        }
         const position = inMemory.positions.get(positionId) ?? {} as PositionDocument
         if (positionDoc.center) {
             position.center = positionDoc.center
@@ -92,8 +104,8 @@ const localDb = {
             positionId,
             position
         )
+        return position
     }
-
 }
 
 

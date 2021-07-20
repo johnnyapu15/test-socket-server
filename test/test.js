@@ -7,15 +7,19 @@
 // with { "type": "commonjs" } in your package.json
 const { createServer } = require("http");
 const { Server } = require("socket.io");
-const {Manager} = require("socket.io-client");
+const {Manager, io} = require("socket.io-client");
 const assert = require("chai").assert;
 
 describe("my awesome project", () => {
     let manager;
     const port = process.env.PORT ?? 3000
+    const url = `ws://localhost:${port}`
+    const opts = {
+        transports: ['websocket'],
+        forceNew: false,
+    }
     before((done) => {
-        manager = new Manager(`http://localhost:${port}`, {transports:['websocket']})
-
+        manager = new Manager(url, opts)
         done();
     });
 
@@ -25,26 +29,74 @@ describe("my awesome project", () => {
     });
 
     it("should work", (done) => {
-        clientSocket = manager.socket(`/room`);
-        clientSocket.on("connect", (arg) => {
-            console.log(clientSocket.id)
-            const id = clientSocket.id
-            userSocket = manager.socket('/user', id)
-            positionSocket = manager.socket('/position', id)
 
+        const roomId = 'test-room'
+        const nickname = 'nickname1'
+
+        const errorHandler = (err) => {console.log(`[error] ${err}`)}
+        roomSocket = io(`${url}/room`, opts);
+        roomSocket.on('error', errorHandler)
+        
+        roomSocket.on("connect", () => {
+            console.log('[connect] room socket')
             
-            clientSocket.emit('get', 'test', (res) => {
+            const id = roomSocket.id
+            console.log(roomSocket.id)
+            console.log('first, connects user, position socket')
             
-                
-                
-                done()
-                clientSocket.close()
+            //
+            var userSocketJoinCallback = async () =>  {}
+            userSocket = io(`${url}/user?id=${id}`, opts);
+            console.log(opts)
+            userSocket.on('error', errorHandler)
+            userSocket.on('connect', () => {
+                console.log('[connect] user socket')
+                console.log(userSocket.id)
+                userSocket.emit('join', id, userSocketJoinCallback)
             })
+
+            //
+            var positionSocketJoinCallback = async () =>  {}
+            positionSocket = io(`${url}/position?id=${id}`, opts);
             
-        });
-        clientSocket2 = manager.socket(`/position`);
-        clientSocket2.on("connect", (arg) => {
-            console.log(clientSocket2.id)           
+            positionSocket.on('error', errorHandler)
+            positionSocket.on('connect', () => {
+                console.log('[connect] position socket')
+                console.log(positionSocket.id)
+                positionSocket.emit('join', id, positionSocketJoinCallback)
+            })
+
+            // waiting resource sockets joining...
+            Promise.all([userSocketJoinCallback, positionSocketJoinCallback])
+
+            roomSocket.emit('get', roomId, (roomData) => {
+                console.log(`got room: ${roomData}`)
+                
+                if (roomData.room) {
+                    // room is created already
+                } else {
+                    // we can create the room
+                    roomSocket.emit('create', roomId, cb => {
+                        if (!cb) {
+                            // error?
+                        } else {
+                            console.log(`created room: ${cb}`)
+                        }
+                    })
+                }
+                // room is created.
+                roomSocket.emit('join', roomId, cb => {
+                    if (cb) {
+                        console.log(`joined to room: ${cb}`)
+                        done()
+                        roomSocket.close()
+                        userSocket.close()
+                        positionSocket.close()
+                    }
+                })
+                
+                
+            })
             
         });
     });
