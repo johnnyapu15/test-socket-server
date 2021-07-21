@@ -37,7 +37,6 @@ io.on('connect', socket => {
  *    - user:connect, position:connect
  */
 const roomNsp = io.of('/room', socket => {
-    console.log(socket.handshake.query)
     // connection handler for 'room' namespace.
     console.log('namespace room connected')
     const id = socket.id
@@ -73,7 +72,7 @@ const roomNsp = io.of('/room', socket => {
             return
         }
 
-        tmpSockets.room.join(id)
+        tmpSockets.room.join(roomId)
         const got = await localDb.getRoom(roomId)
         cb({ room: got })
     })
@@ -86,7 +85,6 @@ const roomNsp = io.of('/room', socket => {
 
 
 const userNsp = io.of('/user', async socket => {
-    console.log(socket.handshake.query)
     // touch the user data
     const id = socket.handshake.query.id as string
     if (!id) {
@@ -104,17 +102,25 @@ const userNsp = io.of('/user', async socket => {
     if (user) {
         socket.emit('me', user)
     }
+
     socket.on('join', async (roomId: string, cb) => {
         if (!roomId) {
             socket.emit('error', 'invalid param')
             cb('error')
             return
         }
-        socket.join(id)
-        localDb.touchUser(id, { _id: id, roomId }) // user update
+        socket.join(roomId)
+        const user = await localDb.touchUser(id, { _id: id, roomId }) // user update
+        // broadcast to the room
+        socket.rooms.forEach((room) => {
+            console.log(`broadcast to ${room}`)
+            userNsp.in(room).emit('update', user)
+        })
+        cb(user)
     })
     socket.on('list', async (roomId: string, cb) => {
-        cb(localDb.getUsers(roomId))
+        const users = await localDb.getUsers(roomId)
+        cb(users)
     })
     socket.on('update', async (userDoc: UserDocument) => {
         // set db non-sync
@@ -139,22 +145,18 @@ const userNsp = io.of('/user', async socket => {
 
 const positionNsp = io.of('/position', async socket => {
     // connection handler for 'position' namespace.
-    console.log(socket.handshake.query)
     const id = socket.handshake.query.id as string
     if (!id) {
         socket.emit('error', 'invalid param')
         return
-    }
-    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms, undefined))
-    await delay(1000)
-    
+    }    
     const tmpSocket = sockets.get(id)
     if (!tmpSocket) {
         socket.emit('error', 'invalid process')
         return
     }
     tmpSocket.position = socket
-    console.log('namespace position connected. it delayed 1000ms!')
+    console.log('namespace position connected.')
 
     socket.on('join', async (roomId: string, cb) => {
         if (!roomId) {
@@ -162,8 +164,9 @@ const positionNsp = io.of('/position', async socket => {
             cb('error')
             return
         }
-        socket.join(id)
-        localDb.touchPosition(id, { _id: id, roomId, userId: id })
+        socket.join(roomId)
+        const position = await localDb.touchPosition(id, { _id: id, roomId, userId: id })
+        cb(position)
     })
 
     socket.on('request', (request) => {
@@ -176,15 +179,14 @@ const positionNsp = io.of('/position', async socket => {
         console.log('request position')
         requesters.push(socket)
     })
-    socket.on('update', async (positionId: string, positionDoc: PositionDocument, cb) => {
+    socket.on('update', async (positionDoc: Partial<PositionDocument>, cb) => {
         console.log(`update position ${positionDoc}`);
         // store db
-        const position = await localDb.touchPosition(positionId, positionDoc) as PositionDocument
+        const position = await localDb.touchPosition(id, positionDoc) as PositionDocument
         // broadcast
         socket.rooms.forEach((room) => {
             positionNsp.in(room).emit('update', position)
-        })
-
+        })        
     })
 
     socket.on('disconnect', (reason: string) => {

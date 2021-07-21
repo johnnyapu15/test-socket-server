@@ -4,7 +4,7 @@
   "description": "",
   "main": "dist/index.js",
   "scripts": {
-    "build": "npx tsc --outDir dist ./src/*.ts ./src/**/*.ts",
+    "build": "npx tsc",
     "start": "node .",
     "dev": "npx ts-node ./src",
     "test": "npx mocha test"

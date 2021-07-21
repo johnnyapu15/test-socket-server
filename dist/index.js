@@ -40,6 +40,7 @@ exports.__esModule = true;
 var socket_io_1 = require("socket.io");
 var db_1 = require("./mw/db");
 var http_1 = require("http");
+var localDb_1 = require("./mw/localDb");
 var server = http_1.createServer();
 var io = new socket_io_1.Server(server, {
     transports: ['websocket'],
@@ -48,19 +49,242 @@ var io = new socket_io_1.Server(server, {
         methods: ['GET', 'POST']
     }
 });
+var sockets = new Map();
+var requesters = [];
+io.on('connect', function (socket) {
+});
+/**
+ * room namespace가 가장 먼저 생성되므로, 이 socket id를 바탕으로 다른 자원을 관리한다.
+ * room:connect => user.id
+ *  - user:connect(roomId), position:connect
+ *  - room:get
+ *  - room:create
+ *  - room:join(roomId, nickname)
+
+ *  - room:join => room.id, user.nickname, user.roomId
+ *    - user:connect, position:connect
+ */
 var roomNsp = io.of('/room', function (socket) {
     // connection handler for 'room' namespace.
     console.log('namespace room connected');
-    socket.on('create', function () { console.log('create room'); });
-    socket.on('join', function () { console.log('join room'); });
-    socket.on('get', function (cb) { console.log('get room'); cb({ namespace: 'room' }); });
+    var id = socket.id;
+    sockets.set(id, { room: socket });
+    socket.on('get', function (roomId, cb) { return __awaiter(void 0, void 0, void 0, function () {
+        var got;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    console.log("get room " + roomId);
+                    return [4 /*yield*/, localDb_1["default"].getRoom(roomId)];
+                case 1:
+                    got = _a.sent();
+                    console.log({ room: got });
+                    cb({ "room": got });
+                    return [2 /*return*/];
+            }
+        });
+    }); });
+    socket.on('create', function (roomId, cb) { return __awaiter(void 0, void 0, void 0, function () {
+        var created;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    console.log('create room');
+                    return [4 /*yield*/, localDb_1["default"].createRoom(roomId, socket.id)];
+                case 1:
+                    created = _a.sent();
+                    cb(created);
+                    return [2 /*return*/];
+            }
+        });
+    }); });
+    socket.on('join', function (roomId, cb) { return __awaiter(void 0, void 0, void 0, function () {
+        var tmpSockets, got;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    // join room
+                    console.log('join room');
+                    if (!roomId) {
+                        socket.emit('error', 'invalid param');
+                        cb('error');
+                        return [2 /*return*/];
+                    }
+                    tmpSockets = sockets.get(id);
+                    if (!tmpSockets || !tmpSockets.room) {
+                        socket.emit('error', 'invalid process');
+                        console.log(tmpSockets);
+                        cb('error');
+                        return [2 /*return*/];
+                    }
+                    tmpSockets.room.join(id);
+                    return [4 /*yield*/, localDb_1["default"].getRoom(roomId)];
+                case 1:
+                    got = _a.sent();
+                    cb({ room: got });
+                    return [2 /*return*/];
+            }
+        });
+    }); });
+    socket.on('delete', function (roomId, cb) { return __awaiter(void 0, void 0, void 0, function () {
+        return __generator(this, function (_a) {
+            return [2 /*return*/];
+        });
+    }); });
 });
-var positionNsp = io.of('/position', function (socket) {
-    console.log('namespace position connected');
-    // connection handler for 'position' namespace.
-    socket.on('request', function () { console.log('request position'); });
-    socket.on('get', function (cb) { console.log('get position'); cb({ namespace: 'position' }); });
-});
+var userNsp = io.of('/user', function (socket) { return __awaiter(void 0, void 0, void 0, function () {
+    var id, tmpSocket, user;
+    return __generator(this, function (_a) {
+        switch (_a.label) {
+            case 0:
+                id = socket.handshake.query.id;
+                if (!id) {
+                    socket.emit('error', 'invalid param');
+                    return [2 /*return*/];
+                }
+                console.log('namespace user connected');
+                tmpSocket = sockets.get(id);
+                if (!tmpSocket) {
+                    socket.emit('error', 'invalid process');
+                    return [2 /*return*/];
+                }
+                tmpSocket.user = socket;
+                return [4 /*yield*/, localDb_1["default"].touchUser(id, { _id: id })];
+            case 1:
+                user = _a.sent();
+                if (user) {
+                    socket.emit('me', user);
+                }
+                socket.on('join', function (roomId, cb) { return __awaiter(void 0, void 0, void 0, function () {
+                    var user;
+                    return __generator(this, function (_a) {
+                        switch (_a.label) {
+                            case 0:
+                                if (!roomId) {
+                                    socket.emit('error', 'invalid param');
+                                    cb('error');
+                                    return [2 /*return*/];
+                                }
+                                socket.join(id);
+                                return [4 /*yield*/, localDb_1["default"].touchUser(id, { _id: id, roomId: roomId })]; // user update
+                            case 1:
+                                user = _a.sent() // user update
+                                ;
+                                cb(user);
+                                return [2 /*return*/];
+                        }
+                    });
+                }); });
+                socket.on('list', function (roomId, cb) { return __awaiter(void 0, void 0, void 0, function () {
+                    return __generator(this, function (_a) {
+                        cb(localDb_1["default"].getUsers(roomId));
+                        return [2 /*return*/];
+                    });
+                }); });
+                socket.on('update', function (userDoc) { return __awaiter(void 0, void 0, void 0, function () {
+                    return __generator(this, function (_a) {
+                        // set db non-sync
+                        localDb_1["default"].touchUser(id, userDoc);
+                        // broadcast to the room
+                        socket.rooms.forEach(function (room) {
+                            userNsp["in"](room).emit('update', userDoc);
+                        });
+                        return [2 /*return*/];
+                    });
+                }); });
+                socket.on('disconnect', function (reason) {
+                    console.log("disconnecting user... " + id);
+                    localDb_1["default"].deleteUser(id);
+                    // broadcast
+                    socket.rooms.forEach(function (room) {
+                        roomNsp["in"](room).emit('update'); // userDoc === undefined
+                    });
+                });
+                return [2 /*return*/];
+        }
+    });
+}); });
+var positionNsp = io.of('/position', function (socket) { return __awaiter(void 0, void 0, void 0, function () {
+    var id, tmpSocket;
+    return __generator(this, function (_a) {
+        id = socket.handshake.query.id;
+        if (!id) {
+            socket.emit('error', 'invalid param');
+            return [2 /*return*/];
+        }
+        tmpSocket = sockets.get(id);
+        if (!tmpSocket) {
+            socket.emit('error', 'invalid process');
+            return [2 /*return*/];
+        }
+        tmpSocket.position = socket;
+        console.log('namespace position connected.');
+        socket.on('join', function (roomId, cb) { return __awaiter(void 0, void 0, void 0, function () {
+            var position;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        if (!roomId) {
+                            socket.emit('error', 'invalid param');
+                            cb('error');
+                            return [2 /*return*/];
+                        }
+                        socket.join(id);
+                        return [4 /*yield*/, localDb_1["default"].touchPosition(id, { _id: id, roomId: roomId, userId: id })];
+                    case 1:
+                        position = _a.sent();
+                        cb(position);
+                        return [2 /*return*/];
+                }
+            });
+        }); });
+        socket.on('request', function (request) {
+            /**
+             * request:{ userId, roomId, targetId }
+             * 1. relay the request to target user.
+             * 2. append the requester into requester[].
+             * 3. then, the interval function will send data to requesters.
+             */
+            console.log('request position');
+            requesters.push(socket);
+        });
+        socket.on('update', function (positionDoc, cb) { return __awaiter(void 0, void 0, void 0, function () {
+            var position;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        console.log("update position " + positionDoc);
+                        return [4 /*yield*/, localDb_1["default"].touchPosition(id, positionDoc)];
+                    case 1:
+                        position = _a.sent();
+                        // broadcast
+                        socket.rooms.forEach(function (room) {
+                            positionNsp["in"](room).emit('update', position);
+                        });
+                        return [2 /*return*/];
+                }
+            });
+        }); });
+        socket.on('disconnect', function (reason) {
+            console.log("disconnecting position... " + id);
+            localDb_1["default"].touchPosition(id);
+            // broadcast
+            socket.rooms.forEach(function (room) {
+                positionNsp["in"](room).emit('update'); // userDoc === undefined
+            });
+        });
+        return [2 /*return*/];
+    });
+}); });
+function updater() {
+    console.log('intervally updater');
+    requesters.forEach(function (socket) {
+        // send user2 data to user1
+        // 2->1. 3->2. 
+        // 특정 유저의 position이 self update인지, followed인지 관리할 수 있으면 좋을듯.
+    });
+}
+// setInterval(updater, 50)
 function joinRoom(socket) {
     return __awaiter(this, void 0, void 0, function () {
         var _a, nickname, roomId, isUnique, user;
@@ -91,8 +315,8 @@ function OnDisconnect(nsp) {
         });
     });
 }
-var port = (_a = process.env.PORT) !== null && _a !== void 0 ? _a : 3000;
-server.listen(port, function () {
+var port = parseInt((_a = process.env.PORT) !== null && _a !== void 0 ? _a : '3000', 10);
+server.listen(port, '0.0.0.0', function () {
     console.log('listeninig...');
 });
 exports["default"] = server;

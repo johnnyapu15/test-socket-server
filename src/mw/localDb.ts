@@ -1,3 +1,4 @@
+import { randomInt } from 'crypto';
 import { Socket } from 'socket.io'
 import { Db, PositionDocument, RoomDocument, UserDocument } from "../interface/dbSchema";
 
@@ -32,6 +33,10 @@ const localDb = {
 
         if (userDoc.nickname) {
             user.nickname = userDoc.nickname
+        } 
+        if (!user.nickname) {
+            // random nickname
+            user.nickname = getRandomName()
         }
         if (userDoc.roomId) {
             user.roomId = userDoc.roomId
@@ -92,7 +97,7 @@ const localDb = {
             inMemory.positions.delete(positionId)
             return true
         }
-        const position = inMemory.positions.get(positionId) ?? {} as PositionDocument
+        const position = inMemory.positions.get(positionId) ?? {_id: positionId} as PositionDocument
         if (positionDoc.center) {
             position.center = positionDoc.center
         }
@@ -108,5 +113,39 @@ const localDb = {
     }
 }
 
+
+const firstName = [
+    '인정사정없는',
+    '개인적인',
+    '강인한',
+    '우렁찬',
+    '착한',
+    '오지는',
+    '풍성한',
+]
+const middleName = [
+    '😁','😆','😍','😜', '🤣'
+]
+const lastName = [
+    '흥부',
+    '놀부',
+    '콩쥐',
+    '팥쥐',
+    '토끼',
+    '자라',
+    '해님',
+    '달님',
+    '심청',
+    '견우',
+    '직녀',
+    '장화',
+    '홍련',
+]
+function getRandomName() {
+    const i = randomInt(firstName.length)
+    const j = randomInt(lastName.length)
+    const o = randomInt(middleName.length)
+    return firstName[i] + lastName[j] + middleName[o]
+}
 
 export default localDb
