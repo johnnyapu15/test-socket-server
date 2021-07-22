@@ -28,19 +28,22 @@ describe("my awesome project", () => {
         const data = {rooms: new Map<string, RoomDocument>(), positions: new Map(), users: new Map()} as Db
         const got = initMember('test', data, done)
     });
-    it("should work 2", () => {
+    it("should work 2", (done) => {
         const data1: Db = {rooms: new Map(), positions: new Map(), users: new Map()}
         const user1 = initMember('test', data1)
         const data2: Db = {rooms: new Map(), positions: new Map(), users: new Map()}
         const user2 = initMember('test', data2)
-        
+        user2.position.emit('update', { center: { x: 1, y: 2 } as Point })
+        // 1000ms면 모든 작업이 다 되었겠지?
         setTimeout(() => {
+            console.log('-----------------------')
             console.log(`${user1.room.id}`)
             console.log(data1)
             console.log(`${user2.room.id}`)
             console.log(data2)
-        }, 500)
-        user2.position.emit('update', { center: { x: 1, y: 2 } as Point })
+            done()
+        }, 1000)
+        
     });
 });
 
