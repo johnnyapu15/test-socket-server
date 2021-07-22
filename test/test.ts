@@ -30,11 +30,11 @@ describe("my awesome project", () => {
     });
     it("should work 2", (done) => {
         const data1: Db = {rooms: new Map(), positions: new Map(), users: new Map()}
-        const user1 = initMember('test', data1)
+        const user1 = initMember('test', data1, undefined, true)
         const data2: Db = {rooms: new Map(), positions: new Map(), users: new Map()}
-        const user2 = initMember('test', data2)
+        const user2 = initMember('test', data2, undefined, true)
         user2.position.emit('update', { center: { x: 1, y: 2 } as Point })
-        // 1000ms면 모든 작업이 다 되었겠지?
+        // 200ms면 모든 작업이 다 되었겠지?
         setTimeout(() => {
             console.log('-----------------------')
             console.log(`${user1.room.id}`)
@@ -42,7 +42,7 @@ describe("my awesome project", () => {
             console.log(`${user2.room.id}`)
             console.log(data2)
             done()
-        }, 1000)
+        }, 200)
         
     });
 });
@@ -56,7 +56,13 @@ function merge(map: Map<string, object>, id: string, newObj: object) {
     }
 }
 
-function initMember(roomId: string, data: Db, done?: Mocha.Done) {
+function logging(prefix: string, msg:string, print?: boolean) {
+    if (print) {
+        console.log(`FROM:${prefix.substr(0,5)} ${msg}`)
+    }
+}
+
+function initMember(roomId: string, data: Db, done?: Mocha.Done, isPrint?: boolean) {
     const port = process.env.PORT ?? 3000
     const url = `ws://localhost:${port}`
     const opts = {
@@ -67,17 +73,16 @@ function initMember(roomId: string, data: Db, done?: Mocha.Done) {
     }
 
     var roomSocket: Socket, userSocket: Socket, positionSocket: Socket
-    const errorHandler = (err) => { console.log(`[error] ${JSON.stringify(err)}`) }
-    const printCb = (val) => { console.log(`[Callback] ${JSON.stringify(val)}`) }
+    const errorHandler = (err) => { logging('error', `${JSON.stringify(err)}`, isPrint) }
+    const printCb = (val) => { logging('callback', `${JSON.stringify(val)}`, isPrint) }
     userSocket = io(`${url}/user`, opts)
     positionSocket = io(`${url}/position`, opts)
     roomSocket = io(`${url}/room`, opts)
         .on('error', errorHandler)
         .on("connect", () => {
-            console.log('[connect] room socket')
             const id = roomSocket.id
-            console.log(roomSocket.id)
-            console.log('first, connects user, position socket')
+            logging(id, `1. [connect] room socket. my unique id = ${id}`, isPrint)
+            // 'first, connects user, position socket'
             opts.query = { id }
             
             // user socket init
@@ -85,8 +90,7 @@ function initMember(roomId: string, data: Db, done?: Mocha.Done) {
             userSocket.connect()
                 .on('error', errorHandler)
                 .on('connect', () => {
-                    console.log('[connect] user socket')
-                    console.log(userSocket.id)
+                    logging(id, '2. [connect] user socket', isPrint)
                     userSocket.emit('join', roomId, userSocketJoinCallback)
                     userSocket.emit('list', roomId, list => {
                         list.users.forEach(user => {
@@ -95,7 +99,6 @@ function initMember(roomId: string, data: Db, done?: Mocha.Done) {
                     })
                 })
                 .on('me', me => {
-                    console.log(`Its me! => ${JSON.stringify(me)}`)
                     merge(data.users, id, me)
                 })
                 .on('update', user => {
@@ -107,12 +110,11 @@ function initMember(roomId: string, data: Db, done?: Mocha.Done) {
             positionSocket.connect()
                 .on('error', errorHandler)
                 .on('connect', () => {
-                    console.log('[connect] position socket')
-                    console.log(positionSocket.id)
+                    logging(id, '2. [connect] position socket', isPrint)
                     positionSocket.emit('join', id, positionSocketJoinCallback)
                 })
                 .on('update', position => {
-                    console.log(`[position] [update] ${JSON.stringify(position)}`)
+                    logging(id, `#. [position] [update] ${JSON.stringify(position)}`, isPrint)
                     merge(data.positions, position._id, position)
                 })
 
@@ -121,11 +123,9 @@ function initMember(roomId: string, data: Db, done?: Mocha.Done) {
             // HOW TO WAIT ????
 
             roomSocket.emit('get', roomId, (roomData) => {
-                console.log(`got room:${JSON.stringify(roomData)}`)
-
                 if (roomData.room) {
                     // room is created already
-                    console.log('the room created already. lets join!')
+                    logging(id, '2. the room created already. lets join!', isPrint)
                 } else {
                     // we can create the room
                     roomSocket.emit('create', roomId, cb => {
@@ -133,14 +133,14 @@ function initMember(roomId: string, data: Db, done?: Mocha.Done) {
                             // error?
                             console.error(`errror???? ${cb}`)
                         } else {
-                            console.log(`created room: ${JSON.stringify(cb)}`)
+                            logging(id, `2. created room: ${JSON.stringify(cb)}`, isPrint)
                         }
                     })
                 }
                 // room is created.
                 roomSocket.emit('join', roomId, cb => {
                     if (cb) {
-                        console.log(`joined to room: ${JSON.stringify(cb)}`)
+                        logging(id,`2. joined to room: ${JSON.stringify(cb)}`, isPrint)
                         merge(data.rooms, roomId, cb.room)
                         // join other resources
                         userSocket.emit('join', roomId, printCb)

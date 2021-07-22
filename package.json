@@ -7,7 +7,7 @@
     "build": "npx tsc",
     "start": "node .",
     "dev": "npx ts-node ./src",
-    "test": "npx mocha test"
+    "test": "npx ts-mocha test/test.ts"
   },
   "author": "",
   "license": "ISC",
