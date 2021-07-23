@@ -4,6 +4,7 @@ import { PositionDocument, UserDocument } from './interface/dbSchema'
 import { checkNicknameUnique, createRoom, createUser, } from './mw/db'
 import { createServer } from 'http'
 import localDb from './mw/localDb'
+import { initRoomNsp, initUserNsp, initPositionNsp} from './namespace'
 
 const server = createServer()
 const io = new Server(server, {
@@ -14,209 +15,20 @@ const io = new Server(server, {
     }
 })
 
-interface Resources {
-    room: Socket
-    user?: Socket
-    position?: Socket
-}
 
-const sockets: Map<string, Resources> = new Map()
-const requesters: Socket[] = []
+
 io.on('connect', socket => {
 })
 
-/**
- * room namespace가 가장 먼저 생성되므로, 이 socket id를 바탕으로 다른 자원을 관리한다.
- * room:connect => user.id
- *  - user:connect(roomId), position:connect
- *  - room:get
- *  - room:create
- *  - room:join(roomId, nickname)
-
- *  - room:join => room.id, user.nickname, user.roomId
- *    - user:connect, position:connect
- */
-const roomNsp = io.of('/room', socket => {
-    // connection handler for 'room' namespace.
-    console.log('namespace room connected')
-    const id = socket.id
-    sockets.set(id, { room: socket })
-
-    socket.on('get', async (roomId: string, cb) => {
-        console.log(`get room ${roomId}`);
-        const got = await localDb.getRoom(roomId)
-        console.log({ room: got })
-        cb({ "room": got })
-    })
-
-    socket.on('create', async (roomId: string, cb) => {
-        console.log('create room')
-        const created = await localDb.createRoom(roomId, socket.id)
-        cb(created)
-    })
-
-    socket.on('join', async (roomId: string, cb) => {
-        // join room
-        console.log('join room')
-        if (!roomId) {
-            socket.emit('error', 'invalid param')
-            cb('error')
-            return
-        }
-        // join sockets
-        const tmpSockets = sockets.get(id)
-        if (!tmpSockets || !tmpSockets.room) {
-            socket.emit('error', 'invalid process')
-            console.log(tmpSockets)
-            cb('error')
-            return
-        }
-
-        tmpSockets.room.join(roomId)
-        const got = await localDb.getRoom(roomId)
-        cb({ room: got })
-    })
-
-    socket.on('delete', async (roomId: string, cb) => {
-        // delete room
-
-    })
-})
+// room namespace listener부터 생성
+const roomNsp = initRoomNsp(io)
+const userNsp = initUserNsp(io)
+const positionNsp = initPositionNsp(io)
 
 
-const userNsp = io.of('/user', async socket => {
-    // touch the user data
-    const id = socket.handshake.query.id as string
-    if (!id) {
-        socket.emit('error', 'invalid param')
-        return
-    }
-    console.log('namespace user connected')
-    const tmpSocket = sockets.get(id)
-    if (!tmpSocket) {
-        socket.emit('error', 'invalid process')
-        return
-    }
-    tmpSocket.user = socket
-    const user = await localDb.touchUser(id, { _id: id })
-    if (user) {
-        socket.emit('me', user)
-    }
-
-    socket.on('join', async (roomId: string, cb) => {
-        if (!roomId) {
-            socket.emit('error', 'invalid param')
-            cb('error')
-            return
-        }
-        socket.join(roomId)
-        const user = await localDb.touchUser(id, { _id: id, roomId }) // user update
-        // broadcast to the room
-        socket.rooms.forEach((room) => {
-            console.log(`broadcast to ${room}`)
-            userNsp.in(room).emit('update', user)
-        })
-        cb(user)
-    })
-    socket.on('list', async (roomId: string, cb) => {
-        const users = await localDb.getUsers(roomId)
-        cb(users)
-    })
-    socket.on('update', async (userDoc: UserDocument) => {
-        // set db non-sync
-        localDb.touchUser(id, userDoc)
-
-        // broadcast to the room
-        socket.rooms.forEach((room) => {
-            userNsp.in(room).emit('update', userDoc)
-        })
-    })
-    socket.on('disconnect', (reason: string) => {
-        console.log(`disconnecting user... ${id}`)
-        localDb.deleteUser(id)
-        // broadcast
-        socket.rooms.forEach((room) => {
-            roomNsp.in(room).emit('update') // userDoc === undefined
-        })
-    })
-
-})
 
 
-const positionNsp = io.of('/position', async socket => {
-    // connection handler for 'position' namespace.
-    const id = socket.handshake.query.id as string
-    if (!id) {
-        socket.emit('error', 'invalid param')
-        return
-    }    
-    const tmpSocket = sockets.get(id)
-    if (!tmpSocket) {
-        socket.emit('error', 'invalid process')
-        return
-    }
-    tmpSocket.position = socket
-    console.log('namespace position connected.')
 
-    socket.on('join', async (roomId: string, cb) => {
-        if (!roomId) {
-            socket.emit('error', 'invalid param')
-            cb('error')
-            return
-        }
-        socket.join(roomId)
-        const position = await localDb.touchPosition(id, { _id: id, roomId, userId: id })
-        cb(position)
-    })
-
-    socket.on('request', (request) => {
-        /**
-         * request:{ userId, roomId, targetId }
-         * 1. relay the request to target user.
-         * 2. append the requester into requester[].
-         * 3. then, the interval function will send data to requesters.
-         */
-        console.log('request position')
-        requesters.push(socket)
-    })
-    socket.on('update', async (positionDoc: Partial<PositionDocument>, cb) => {
-        console.log(`update position ${positionDoc}`);
-        // store db
-        const position = await localDb.touchPosition(id, positionDoc) as PositionDocument
-        // broadcast
-        socket.rooms.forEach((room) => {
-            positionNsp.in(room).emit('update', position)
-        })        
-    })
-
-    socket.on('disconnect', (reason: string) => {
-        console.log(`disconnecting position... ${id}`)
-        localDb.touchPosition(id)
-        // broadcast
-        socket.rooms.forEach((room) => {
-            positionNsp.in(room).emit('update') // userDoc === undefined
-        })
-    })
-    // update logic
-    /**
-     * update logic
-     * the server manages 'requester[]', the array of socket of requesters that will receive the position they requested,
-     * and 'position{}', the dictionary of positions, it maybe contained in DB.
-     * server sends the position of requested user to requesters intervally.
-     * 
-     */
-})
-
-function updater() {
-
-    console.log('intervally updater')
-    requesters.forEach(socket => {
-        // send user2 data to user1
-        // 2->1. 3->2. 
-        // 특정 유저의 position이 self update인지, followed인지 관리할 수 있으면 좋을듯.
-    });
-}
-// setInterval(updater, 50)
 
 async function joinRoom(socket: Socket) {
     const { nickname, roomId } = socket.handshake.query
@@ -245,3 +57,7 @@ server.listen(port, '0.0.0.0', () => {
 
 
 export default server
+
+function initUser(io: Server<import("socket.io/dist/typed-events").DefaultEventsMap, import("socket.io/dist/typed-events").DefaultEventsMap, import("socket.io/dist/typed-events").DefaultEventsMap>) {
+    throw new Error('Function not implemented.')
+}

@@ -54,14 +54,11 @@ const localDb = {
                 }
             }
         }
-        return { users }
-    },
-    deleteUser: (userId: string) => {
-        inMemory.users.delete(userId)
+        return users
     },
     onSocketDisconnect: async (socket: Socket) => {
         // delete user
-        localDb.deleteUser(socket.id)
+        localDb.touchUser(socket.id)
     },
     createRoom: async (roomId: string, socketId: string) => {
         let created = false

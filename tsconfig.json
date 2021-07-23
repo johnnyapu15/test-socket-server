@@ -3,6 +3,7 @@
         "module": "CommonJS",
         "downlevelIteration": true,
         "outDir": "dist",
+        "lib": ["DOM", "ES6"]
     },
     "include": [
         "src/*.ts",
