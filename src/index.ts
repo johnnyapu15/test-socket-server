@@ -4,11 +4,29 @@ import { PositionDocument, UserDocument } from './interface/dbSchema'
 import { checkNicknameUnique, createRoom, createUser, } from './mw/db'
 import { createServer, IncomingMessage, ServerResponse } from 'http'
 import localDb from './mw/localDb'
-import { initRoomNsp, initUserNsp, initPositionNsp} from './namespace'
+import { initRoomNsp, initUserNsp, initPositionNsp } from './namespace'
+import { readFileSync } from 'fs'
 
-function handler (req: IncomingMessage, res: ServerResponse) {
-    res.writeHead(200)
-    res.write('OK!!!')
+
+function route(url: string, res: ServerResponse) {
+
+    try {
+        const buf = readFileSync(`./test/client${url}`)
+        res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Length': buf.length })
+        res.write(buf)
+    } catch (e) {
+
+    }
+}
+function handler(req: IncomingMessage, res: ServerResponse) {
+    console.log(req.url)
+    if (req.url === '/') {
+        const buf = readFileSync('./test/client/test.html')
+        res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Length': buf.length })
+        res.write(buf)
+    } else {
+        route(req.url, res)
+    }
     res.end()
 }
 const server = createServer(handler)
