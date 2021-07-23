@@ -79,13 +79,13 @@ function logging(prefix: string, msg:string, print?: boolean) {
 }
 
 function initMember(roomId: string, data: Db, done?: Mocha.Done, isPrint?: boolean) {
-    const port = process.env.PORT ?? 3000
-    const url = `ws://localhost:${port}`
+    const port = 3111
+    const url = `http://curatesome.com:${port}`
     const opts = {
         transports: ['websocket'],
         autoConnect: false,
         forceNew: true,
-        query: {}  
+        query: {}
     }
 
     var roomSocket: Socket, userSocket: Socket, positionSocket: Socket

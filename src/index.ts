@@ -2,11 +2,16 @@
 import { Namespace, Server, Socket } from 'socket.io'
 import { PositionDocument, UserDocument } from './interface/dbSchema'
 import { checkNicknameUnique, createRoom, createUser, } from './mw/db'
-import { createServer } from 'http'
+import { createServer, IncomingMessage, ServerResponse } from 'http'
 import localDb from './mw/localDb'
 import { initRoomNsp, initUserNsp, initPositionNsp} from './namespace'
 
-const server = createServer()
+function handler (req: IncomingMessage, res: ServerResponse) {
+    res.writeHead(200)
+    res.write('OK!!!')
+    res.end()
+}
+const server = createServer(handler)
 const io = new Server(server, {
     transports: ['websocket'],
     cors: {
@@ -52,7 +57,7 @@ async function OnDisconnect(nsp: Namespace) {
 
 const port = parseInt(process.env.PORT ?? '3000', 10)
 server.listen(port, '0.0.0.0', () => {
-    console.log('listeninig...')
+    console.log(`listeninig... `)
 })
 
 
