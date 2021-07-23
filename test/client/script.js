@@ -28,7 +28,7 @@ function gc() {
     }
     return c
 }
-var a = [];
+var a = new Map();
 window.onload = function myfunction() {
     cn = document.getElementById('cw');
     c = cn.getContext('2d');
@@ -87,7 +87,6 @@ function ob(x, y, r, cc, o, s, id) {
         c.lineTo(this.x, this.y);
         c.stroke();
         c.closePath();
-
     }
 
     this.resize = () => {
@@ -99,8 +98,10 @@ function anim() {
     requestAnimationFrame(anim);
     c.fillStyle = "rgba(0,0,0,0.05)";
     c.fillRect(0, 0, cn.width, cn.height);
-    a.forEach(function(e, i) {
-        e.dr();
+    a.forEach(function(aa, k, _) {
+        aa.forEach((e, i) => {
+            e.dr();
+        })
     });
 
 }
@@ -111,18 +112,62 @@ function createPoint(p) {
         var x = Math.random() * (innerWidth - 2 * r) + r;
         var y = Math.random() * (innerHeight - 2 * r) + r;
         var t = new ob(innerWidth / 2, innerHeight / 2, 5, "red", Math.random() * 200 + 20, 2, p);
-        a.push(t);
+        if (!a.has(p)) {
+            a.set(p, [])
+        }
+        a.get(p).push(t);
     }
 }
 
 const data = { rooms: new Map(), positions: new Map(), users: new Map() }
 const user = initMember('test', data, undefined, true)
+user.user.on('update', got => {
+    if (!data.users.has(got.id)) {
+        // new user
+        createPoint(got.id)
+    }
+    if (!got.user) {
+        // delete user
+        a.delete(got.id)
+    }
+})
+user.position.on('update', got => {
+
+})
 
 window.onmousemove = function(e) {
-    user.position.emit('update', { center: { x: e.clientX, y: e.clientY } })
+    user.position.emit('update', { center: { x: e.clientX, y: e.clientY } }, ()=>{})
 }
 
 
+function disconnect(objs) {
+    objs.forEach(v => {
+        v.room.disconnect()
+        v.user.disconnect()
+        v.position.disconnect()
+    })
+}
+
+function merge(map, id, newObj) {
+    // 기존 오브젝트와 병합하거나, 삭제한다.
+    if (!newObj) {
+        map.delete(id)
+    } else {
+        const preObj = map.get(id)
+        
+        if (preObj) {
+            map.set(id, {...preObj, ...newObj})
+        } else {
+            map.set(id, newObj)
+        }
+    }
+}
+
+function logging(prefix, msg, print) {
+    if (print) {
+        console.log(`FROM:${prefix.substr(0,5)} ${msg}`)
+    }
+}
 
 function initMember(roomId, data, done, isPrint) {
     const port = 3000
@@ -131,7 +176,7 @@ function initMember(roomId, data, done, isPrint) {
         transports: ['websocket'],
         autoConnect: false,
         forceNew: true,
-        query: {}
+        query: {}  
     }
 
     var roomSocket, userSocket, positionSocket
@@ -142,97 +187,79 @@ function initMember(roomId, data, done, isPrint) {
     roomSocket = io(`${url}/room`, opts)
         .on('error', errorHandler)
         .on("connect", () => {
-            const id = roomSocket.id
+            const id = roomSocket.id // room socket의 id를 클라이언트의 id로 활용
             logging(id, `1. [connect] room socket. my unique id = ${id}`, isPrint)
-                // 'first, connects user, position socket'
-            opts.query = { id }
 
+            // 'first, connects user, position socket'
+            opts.query = { id }
             // user socket init
-            var userSocketJoinCallback = async() => {}
+            var userSocketJoinCallback = async () => { }
             userSocket.connect()
                 .on('error', errorHandler)
                 .on('connect', () => {
                     logging(id, '2. [connect] user socket', isPrint)
-                    userSocket.emit('join', roomId, userSocketJoinCallback)
-                    userSocket.emit('list', roomId, list => {
-                        list.users.forEach(user => {
-                            newo = merge(data.users, user._id, user)
-                            if (newo) {
-                                createPoint(user._id)
-                            }
-                        });
-                    })
                 })
                 .on('me', me => {
                     merge(data.users, id, me)
                 })
-                .on('update', user => {
-                    newo = merge(data.users, user._id, user)
-                    if (newo) {
-                        createPoint(user._id)
+                .on('update', got => {
+                    if (!got.user) {
+                        logging(id, `user left: ${got.id}`, isPrint)
                     }
+                    merge(data.users, got.id, got.user)
                 })
-
             // position socket init
-            var positionSocketJoinCallback = async() => {}
+            var positionSocketJoinCallback = async () => { }
             positionSocket.connect()
                 .on('error', errorHandler)
                 .on('connect', () => {
                     logging(id, '2. [connect] position socket', isPrint)
-                    positionSocket.emit('join', id, positionSocketJoinCallback)
                 })
-                .on('update', position => {
-                    logging(position._id, `#. [position] [update] ${JSON.stringify(position)}`, isPrint)
-                    merge(data.positions, position._id, position)
+                .on('update', got => {
+                    logging(id, `#. [position-update] ${JSON.stringify(got.position)}`, isPrint)
+                    merge(data.positions, got.id, got.position)
+                })
 
-                })
-            roomSocket.emit('get', roomId, (roomData) => {
-                if (roomData.room) {
+            // lets create or join room
+            roomSocket.emit('get', roomId, (cb) => {
+                if (cb.room) {
                     // room is created already
                     logging(id, '2. the room created already. lets join!', isPrint)
                 } else {
                     // we can create the room
                     roomSocket.emit('create', roomId, cb => {
-                        if (!cb) {
+                        if (cb.error) {
                             // error?
-                            console.error(`errror???? ${cb}`)
+                            console.error(`errror when creating the room, msg: ${cb}`)
+                            if (done) done()
+                            return
                         } else {
-                            logging(id, `2. created room: ${JSON.stringify(cb)}`, isPrint)
+                            logging(id, `2. created room: ${JSON.stringify(cb.room)}`, isPrint)
                         }
                     })
                 }
-                // room is created.
+                // so there is the room. lets join.
                 roomSocket.emit('join', roomId, cb => {
-                    if (cb) {
-                        logging(id, `2. joined to room: ${JSON.stringify(cb)}`, isPrint)
-                        merge(data.rooms, roomId, cb.room)
-                            // join other resources
-                        userSocket.emit('join', roomId, printCb)
-                        positionSocket.emit('join', roomId, printCb)
+                    if (cb.error) {
+                        logging(id, cb.error, isPrint)
                         if (done) done()
+                        return
+                    } else {
+                        logging(id,`2. joined to room: ${JSON.stringify(cb.room)}`, isPrint)
+                        merge(data.rooms, cb.id, cb.room)
                     }
+                    // if successfully joined to the room, manage other sockets.
+                    // user socket
+                    userSocket.emit('join', roomId, userSocketJoinCallback)
+                    userSocket.emit('init', roomId)
+
+                    // position socket
+                    positionSocket.emit('join', roomId, positionSocketJoinCallback)
+
+                    if (done) done()
                 })
             })
         });
-    roomSocket.connect()
+        roomSocket.connect()
     return { room: roomSocket, user: userSocket, position: positionSocket }
-}
-
-
-
-function logging(prefix, msg, print) {
-    if (print) {
-        console.log(`FROM:${prefix.substr(0,5)} ${msg}`)
-    }
-}
-
-function merge(map, id, newObj) {
-    const preObj = map.get(id)
-    if (preObj) {
-        map.set(id, {...preObj, ...newObj })
-        return false
-    } else {
-        map.set(id, newObj)
-        return true
-    }
 }

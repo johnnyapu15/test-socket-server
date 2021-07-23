@@ -1,8 +1,5 @@
 // with { "type": "module" } in your package.json
-import { createServer } from "http";
 import { io, SocketOptions, Socket } from "socket.io-client";
-import { Server } from "socket.io";
-import { assert } from "chai";
 import {Db, Point, RoomDocument, UserDocument} from '../src/interface/dbSchema'
 
 // with { "type": "commonjs" } in your package.json
@@ -164,10 +161,11 @@ function initMember(roomId: string, data: Db, done?: Mocha.Done, isPrint?: boole
                     // user socket
                     userSocket.emit('join', roomId, userSocketJoinCallback)
                     userSocket.emit('list', roomId, list => {
-                        list.users.forEach(user => {
-                            merge(data.users, user._id, user)
-                        });
+                        // list.users.forEach(user => {
+                        //     merge(data.users, user._id, user)
+                        // });
                     })
+                    userSocket.emit('init', roomId) // server will send users by 'update' event.
 
                     // position socket
                     positionSocket.emit('join', roomId, positionSocketJoinCallback)

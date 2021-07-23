@@ -32,7 +32,14 @@ const userNsp = io.of('/user', async socket => {
     })
     socket.on('list', async (roomId: string, cb) => {
         const users = await localDb.getUsers(roomId)
+        
         cb({users})
+    })
+    socket.on('init', async (roomId: string) => {
+        const users = await localDb.getUsers(roomId)
+        users.forEach(user => {
+            socket.emit('update', {id:user._id, user})
+        })
     })
     socket.on('update', async (user: UserDocument, cb) => {
         if (id !== user._id) {
