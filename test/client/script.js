@@ -136,7 +136,7 @@ user.position.on('update', got => {
 })
 
 window.onmousemove = function(e) {
-    user.position.emit('update', { center: { x: e.clientX, y: e.clientY } }, ()=>{})
+    user.position.emit('update', { center: { x: e.clientX, y: e.clientY } }, () => {})
 }
 
 
@@ -154,9 +154,9 @@ function merge(map, id, newObj) {
         map.delete(id)
     } else {
         const preObj = map.get(id)
-        
+
         if (preObj) {
-            map.set(id, {...preObj, ...newObj})
+            map.set(id, {...preObj, ...newObj })
         } else {
             map.set(id, newObj)
         }
@@ -171,12 +171,12 @@ function logging(prefix, msg, print) {
 
 function initMember(roomId, data, done, isPrint) {
     const port = 3000
-    const url = `ws://localhost:${port}`
+    const url = `ws://curatesome.com:${port}`
     const opts = {
         transports: ['websocket'],
         autoConnect: false,
         forceNew: true,
-        query: {}  
+        query: {}
     }
 
     var roomSocket, userSocket, positionSocket
@@ -192,8 +192,8 @@ function initMember(roomId, data, done, isPrint) {
 
             // 'first, connects user, position socket'
             opts.query = { id }
-            // user socket init
-            var userSocketJoinCallback = async () => { }
+                // user socket init
+            var userSocketJoinCallback = async() => {}
             userSocket.connect()
                 .on('error', errorHandler)
                 .on('connect', () => {
@@ -208,8 +208,8 @@ function initMember(roomId, data, done, isPrint) {
                     }
                     merge(data.users, got.id, got.user)
                 })
-            // position socket init
-            var positionSocketJoinCallback = async () => { }
+                // position socket init
+            var positionSocketJoinCallback = async() => {}
             positionSocket.connect()
                 .on('error', errorHandler)
                 .on('connect', () => {
@@ -245,7 +245,7 @@ function initMember(roomId, data, done, isPrint) {
                         if (done) done()
                         return
                     } else {
-                        logging(id,`2. joined to room: ${JSON.stringify(cb.room)}`, isPrint)
+                        logging(id, `2. joined to room: ${JSON.stringify(cb.room)}`, isPrint)
                         merge(data.rooms, cb.id, cb.room)
                     }
                     // if successfully joined to the room, manage other sockets.
@@ -260,6 +260,6 @@ function initMember(roomId, data, done, isPrint) {
                 })
             })
         });
-        roomSocket.connect()
+    roomSocket.connect()
     return { room: roomSocket, user: userSocket, position: positionSocket }
 }
