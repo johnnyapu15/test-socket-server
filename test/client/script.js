@@ -111,7 +111,7 @@ function createPoint(p) {
         var r = 30;
         var x = Math.random() * (innerWidth - 2 * r) + r;
         var y = Math.random() * (innerHeight - 2 * r) + r;
-        var t = new ob(innerWidth / 2, innerHeight / 2, 5, "red", Math.random() * 200 + 20, 2, p);
+        var t = new ob(innerWidth / 2, innerHeight / 2, 5, gc(), Math.random() * 200 + 20, 2, p);
         if (!a.has(p)) {
             a.set(p, [])
         }

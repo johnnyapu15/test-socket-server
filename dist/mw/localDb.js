@@ -124,16 +124,13 @@ var localDb = {
                     finally { if (e_2) throw e_2.error; }
                 }
             }
-            return [2 /*return*/, { users: users }];
+            return [2 /*return*/, users];
         });
     }); },
-    deleteUser: function (userId) {
-        inMemory.users["delete"](userId);
-    },
     onSocketDisconnect: function (socket) { return __awaiter(void 0, void 0, void 0, function () {
         return __generator(this, function (_a) {
             // delete user
-            localDb.deleteUser(socket.id);
+            localDb.touchUser(socket.id);
             return [2 /*return*/];
         });
     }); },
